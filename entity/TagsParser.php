@@ -2,104 +2,22 @@
 
 namespace Parser;
 
-use Generator;
-use GuzzleHttp\Client;
-
-class TagsParser
+class TagsParser implements TagParserInterface, MetaTagsParserInterface
 {
-    /**
-     * @var Client
-     */
-    protected $client;
-    /**
-     * @var array
-     */
-    protected $parsedMetaContent = [];
-    /**
-     * @var array
-     */
-    protected $parsedTagContent = [];
-    /**
-     * @var array
-     */
-    protected $urls;
-    /**
-     * @var string
-     */
-    protected $pattern;
+    const META_PATTERN = '/\<meta.*"(?P<prop>.*)".*"(?P<value>.*)"[^>]*>/';
+    const TAG_PATTERN = '/<%s[^>]*>(?P<value>.*)<\/%s>/';
 
-    public function __construct(array $urls)
+    public function getMetaContent(string $body): array
     {
-        foreach ($urls as $url) {
-            $this->urls[] = [
-                'name' => ucfirst($this->getUrlName($url)),
-                'url' => $url
-            ];
-        }
+        preg_match_all(self::META_PATTERN, $body, $matches);
 
-        $this->client = new Client;
+        return array_combine($matches['prop'], $matches['value']);
     }
 
-    protected function getUrlName(string $url): string
+    public function getTagContent(string $tag, string $body): array
     {
-        $urlHost = parse_url($url, PHP_URL_HOST);
-        $pos = strpos($urlHost, '.');
-        $name = substr($urlHost, 0, $pos);
+        preg_match_all(sprintf(self::TAG_PATTERN, $tag, $tag), $body, $matches);
 
-        return $name;
-    }
-
-    public function getUrls(): array
-    {
-        return $this->urls;
-    }
-
-    protected function generateUrls(): Generator
-    {
-        foreach ($this->urls as $url) {
-            yield $url;
-        }
-    }
-
-    public function addUrl(string $url): void
-    {
-        $this->urls[] = [
-            'name' => $this->getUrlName($url),
-            'url' => $url
-        ];
-    }
-
-    public function getMetaContent(): array
-    {
-        $this->pattern = '/\<meta.*"(?P<prop>.*)".*"(?P<value>.*)"[^>]*>/';
-
-        foreach ($this->generateUrls() as $url) {
-            preg_match_all($this->pattern, $this->getContent($url['url']), $matches);
-            $meta = array_combine($matches['prop'], $matches['value']);
-            $this->parsedMetaContent[$url['name']] = $meta;
-        }
-
-        return $this->parsedMetaContent;
-    }
-
-    public function getTagContent(string $tag): array
-    {
-        $this->pattern = $tagPattern = "/<${tag}[^>]*>(?P<value>.*)<\/${tag}>/";
-
-        foreach ($this->generateUrls() as $url) {
-            preg_match_all($this->pattern, $this->getContent($url['url']), $matches);
-            $tag = $matches['value'];
-            $this->parsedTagContent[$url['name']] = $tag;
-        }
-
-        return $this->parsedTagContent;
-    }
-
-    protected function getContent(string $url): string
-    {
-        $response = $this->client->get($url);
-        $content = $response->getBody();
-
-        return $content;
+        return $matches['value'];
     }
 }
